@@ -2,7 +2,7 @@ const InvariantError = require('../exceptions/InvariantError');
 const NotFoundError = require('../exceptions/NotFoundError');
 const ClientError = require('../exceptions/ClientError');
 const axios = require('axios');
-const { toLower, fixCity, adjustHour } = require('../utils/utils');
+const { toLower, fixCity, adjustHour, parseHour, getHour, getWeatherDesc, getWeatherImage } = require('../utils/utils');
  
 class KrlService {
     constructor() {
@@ -31,41 +31,50 @@ class KrlService {
                 let long = responseStationId[i].data.data[0].long
                 responseRoute[i].lat = lat
                 responseRoute[i].long = long
-                try {
-                    let reverseGeocodeResponse = await axios.get(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${long}&localityLanguage=id`)
-                    let adminLevels = reverseGeocodeResponse.data.localityInfo.administrative.filter(item => item.adminLevel >= 4 && item.adminLevel <= 6)
-                    responseRoute[i].province = (adminLevels.find(level => level.adminLevel === 4) || { name: '-'}).name
-                    responseRoute[i].city = (adminLevels.find(level => level.adminLevel === 5) || { name: '-'}).name
-                } catch (error) {
-                    console.log(error)
-                }
             }
 
-            const promisesWeather = responseRoute.map(station => {
-                if (station.city === '-') {
-                    return '-'
-                }
-                const province = toLower(station.province, 'province')
-                return axios.get(`https://cuaca-gempa-rest-api.vercel.app/weather/${province}`)
-            })
+            const nowHour = parseInt(new Date().getHours())
+            const firstHour = parseHour(responseRoute[0].time_est)
 
-            const responseWeather = await Promise.all(promisesWeather)
-
-            for (let i = 0; i < responseRoute.length; i++) {
-                let hour = responseRoute[i].time_est
-                if (hour !== null) {
-                    hour = parseInt(hour.split(':')[0]);
-                    const city = fixCity(responseRoute[i].city)
-                    const weatherArea = responseWeather[i].data.data.areas.find(area => area.description.includes(city)) || '-'
-                    if (weatherArea === '-') {
-                        responseRoute[i].weather = '-'
-                        continue
+            if (firstHour !== null) {
+                const promisesPresentWeather = responseRoute.filter(station => parseHour(station.time_est) === firstHour || parseHour(station.time_est) < nowHour).map(station => {
+                    const lat = station.lat
+                    const long = station.long
+                    return axios.get(`https://weather.bmkg.go.id/api/amandemen/analyze?lon=${long}&lat=${lat}`)
+                })
+    
+                const responsePresentWeather = await Promise.all(promisesPresentWeather)
+    
+                const promisesFutureWeather = responseRoute.filter(station => parseHour(station.time_est) > firstHour).map(station => {
+                    const lat = station.lat
+                    const long = station.long
+                    return axios.get(`https://cuaca.bmkg.go.id/api/df/v1/forecast/coord?lon=${long}&lat=${lat}`)
+                })
+    
+                const responseFutureWeather = await Promise.all(promisesFutureWeather)
+    
+                for (let i = 0; i < responseRoute.length; i++) {
+                    if (i < responsePresentWeather.length) {
+                        responseRoute[i].weather_code = responsePresentWeather[i].data[0].weather
+                        responseRoute[i].weather_desc = getWeatherDesc(responsePresentWeather[i].data[0].weather)
+                        responseRoute[i].temperature = responsePresentWeather[i].data[0].temp
+                        responseRoute[i].humidity = responsePresentWeather[i].data[0].rh
+                        responseRoute[i].prediction_time = responsePresentWeather[i].data[0].date
+                        responseRoute[i].image = getWeatherImage(responsePresentWeather[i].data[0].weather)
+                    } else {
+                        let hour = parseHour(responseRoute[i].time_est)
+                        let weatherData = responseFutureWeather[i - responsePresentWeather.length].data.data[0].cuaca[0].find(data => getHour(data.datetime) === hour)
+                        if (weatherData === undefined) {
+                            responseRoute[i].weatherCode = '-'
+                            continue
+                        }
+                        responseRoute[i].weather_code = weatherData.weather
+                        responseRoute[i].weather_desc = weatherData.weather_desc
+                        responseRoute[i].temperature = weatherData.t
+                        responseRoute[i].humidity = weatherData.hu
+                        responseRoute[i].prediction_time = weatherData.datetime
+                        responseRoute[i].image = getWeatherImage(weatherData.weather)
                     }
-                    const index = adjustHour(hour, weatherArea.params.find(param => param.id === 'weather').times)
-                    responseRoute[i].temperature = weatherArea.params.find(param => param.id === 't').times[index].celcius
-                    responseRoute[i].humidity = weatherArea.params.find(param => param.id === 'hu').times[index].value
-                    responseRoute[i].weather = weatherArea.params.find(param => param.id === 'weather').times[index].name
-                    responseRoute[i].weatherCode = weatherArea.params.find(param => param.id === 'weather').times[index].code
                 }
             }
     
