@@ -21,9 +21,7 @@ function fixCity(string) {
 
     let result = string
 
-    if (string.includes('Bogor')) {
-        result = 'Kota Bogor'
-    } else if (string.includes('Kota') || string.includes('Kabupaten')) {
+    if (string.includes('Kota') || string.includes('Kabupaten')) {
         result = string.replace('Kota ', '').replace('Kabupaten ', '')
     }
 

@@ -55,7 +55,7 @@ class KrlService {
                 let hour = responseRoute[i].time_est
                 hour = parseInt(hour.split(':')[0]);
                 const city = fixCity(responseRoute[i].city)
-                const weatherArea = responseWeather[i].data.data.areas.find(area => area.description === city) || '-'
+                const weatherArea = responseWeather[i].data.data.areas.find(area => area.description.includes(city)) || '-'
                 if (weatherArea === '-') {
                     responseRoute[i].weather = '-'
                     continue
