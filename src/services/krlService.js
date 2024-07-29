@@ -53,18 +53,20 @@ class KrlService {
 
             for (let i = 0; i < responseRoute.length; i++) {
                 let hour = responseRoute[i].time_est
-                hour = parseInt(hour.split(':')[0]);
-                const city = fixCity(responseRoute[i].city)
-                const weatherArea = responseWeather[i].data.data.areas.find(area => area.description.includes(city)) || '-'
-                if (weatherArea === '-') {
-                    responseRoute[i].weather = '-'
-                    continue
+                if (hour !== null) {
+                    hour = parseInt(hour.split(':')[0]);
+                    const city = fixCity(responseRoute[i].city)
+                    const weatherArea = responseWeather[i].data.data.areas.find(area => area.description.includes(city)) || '-'
+                    if (weatherArea === '-') {
+                        responseRoute[i].weather = '-'
+                        continue
+                    }
+                    const index = adjustHour(hour, weatherArea.params.find(param => param.id === 'weather').times)
+                    responseRoute[i].temperature = weatherArea.params.find(param => param.id === 't').times[index].celcius
+                    responseRoute[i].humidity = weatherArea.params.find(param => param.id === 'hu').times[index].value
+                    responseRoute[i].weather = weatherArea.params.find(param => param.id === 'weather').times[index].name
+                    responseRoute[i].weatherCode = weatherArea.params.find(param => param.id === 'weather').times[index].code
                 }
-                const index = adjustHour(hour, weatherArea.params.find(param => param.id === 'weather').times)
-                responseRoute[i].temperature = weatherArea.params.find(param => param.id === 't').times[index].celcius
-                responseRoute[i].humidity = weatherArea.params.find(param => param.id === 'hu').times[index].value
-                responseRoute[i].weather = weatherArea.params.find(param => param.id === 'weather').times[index].name
-                responseRoute[i].weatherCode = weatherArea.params.find(param => param.id === 'weather').times[index].code
             }
     
             return responseRoute
