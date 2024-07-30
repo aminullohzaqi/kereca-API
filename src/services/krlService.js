@@ -65,7 +65,7 @@ class KrlService {
                         let hour = parseHour(responseRoute[i].time_est)
                         let weatherData = responseFutureWeather[i - responsePresentWeather.length].data.data[0].cuaca[0].find(data => getHour(data.datetime) === hour)
                         if (weatherData === undefined) {
-                            responseRoute[i].weatherCode = '-'
+                            responseRoute[i].weather_code = '-'
                             continue
                         }
                         responseRoute[i].weather_code = weatherData.weather
